@@ -8,7 +8,7 @@ client_id = '4e97513dc1aee76830dd43ba617eaccf97f87bef'
 client_secret = 'bd5eee02684a8e2456b3e3d94ed0b5f914c8bf29'
 
 # Config
-redirect_uri = 'http://localhost:5000'
+redirect_uri = 'http://localhost'
 
 # Build authorization URL
 auth_url = 'https://once.deputy.com/my/oauth/login'
