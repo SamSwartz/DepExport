@@ -21,17 +21,19 @@ params = {
 
 auth_url += '?' + urlencode(params)
 
+
+
 # Redirect user to auth URL
 print(f'Please authorize at: {auth_url}')
 # User authenticates and gets redirected back
 
-# Parse authorization code from redirect URL
-redirect_response = 'https://lakeshomes.na.deputy.com/?code=' 
+# Wait for user input
+redirect_url = input('Paste full redirect URL:')
 
-auth_code = parse_qs(redirect_response)['code'][0]
-print(f'Got auth code: {auth_code}')
+# Extract code  
+code = parse_qs(redirect_url)['code'][0]
 
-
+print(f'Got code: {code}')
 
 # Step 2: Connect to Deputy API
 # Generate access token
