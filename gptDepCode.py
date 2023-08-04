@@ -65,29 +65,14 @@ def get_all_users(access_token):
         print(f"Failed to get users. Error: {response.status_code}")
         return None
     
-def get_timesheets_hours(access_token, user_id):
+def get_timesheets_hours(access_token):
     headers = {
         'Authorization': f'Bearer {access_token}',
     }
     url = f'{BASE_URL}/resource/Timesheet/QUERY'
     params = {
-        'search': {
-            's1': {
-                'field': 'Employee',
-                'data': user_id,
-                'type': 'eq',
-            },
-            's2': {
-                'field': 'Date',
-                'data': '2022-10-01',
-                'type': 'gt',
-            },
-            's3': {
-                'field': 'Date',
-                'data': '2022-10-15',
-                'type': 'lt',
-            },
-        },
+        'aggr': {"TotalTime": "sum"},
+        'group': ["Employee"],
     }
 
     response = requests.post(url, headers=headers, json=params)
@@ -95,9 +80,39 @@ def get_timesheets_hours(access_token, user_id):
     if response.status_code == 200:
         return response.json()
     else:
-        print(f"Failed to get timesheets for user {user_id}. Error: {response.status_code}")
+        print(f"Failed to get timesheets. Error: {response.status_code}")
         return None
 
+def get_employee_by_id(access_token, user_id):
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json',
+    }
+    url = f'{BASE_URL}/resource/Employee/QUERY'
+    params = {
+        'search': {
+            's1': {
+                'field': 'Id',
+                'data': user_id,
+                'type': 'eq',
+            }
+        }
+    }
+
+    response = requests.post(url, headers=headers, json=params)
+
+    if response.status_code == 200:
+        employees_data = response.json()
+        for employee in employees_data:
+            if employee['Id'] == user_id:
+                return employee
+        print(f"Employee {user_id} not found.")
+        return None
+    else:
+        print(f"Failed to get employee {user_id}. Error: {response.status_code}")
+        return None
+
+    
 # Additional function to get timesheets for a specific date range
 def get_timesheets_by_date_range(access_token, user_id, start_date, end_date):
     headers = {
@@ -122,28 +137,52 @@ def get_timesheets_by_date_range(access_token, user_id, start_date, end_date):
                 'type': 'lt',
             },
         },
+        'fields': 'Id,Employee,StartTime,EndTime,TotalTime,DisplayName',  # Include the DisplayName field
     }
 
     response = requests.post(url, headers=headers, json=params)
 
+    print("Response Content:", response.text)
     if response.status_code == 200:
         return response.json()
     else:
-        print(f"Failed to get timesheets for user {user_id}. Error: {response.status_code}")
+        print(f"Failed to get timesheets for {user_id}. Error: {response.status_code}")
         return None
+    
+def get_employee_name_and_area(access_token, user_id):
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+    }
+    url = f'{BASE_URL}/resource/Employee/{user_id}'
+
+    response = requests.get(url, headers=headers)
+
+    if response.status_code == 200:
+        data = response.json()
+        display_name = data.get('DisplayName', '')
+        area_data = data.get('Areas', [])  # 'Areas' may contain a list of area data
+
+        # Assuming 'Areas' contains a list, we can choose the first item to get the area name
+        area_name = area_data[0]['AreaName'] if area_data else ''
+        return display_name, area_name
+    else:
+        print(f"Failed to get employee {user_id}. Error: {response.status_code}")
+        return '', ''
 
 
-def write_to_excel(data, start_date, end_date):
+def write_to_excel(data, access_token, start_date, end_date):
     workbook = openpyxl.Workbook()
     sheet = workbook.active
     sheet.title = 'Timesheets Hours'
 
-    # Assuming the response contains a list of timesheets with hours data
-    # Replace this with the actual structure of the API response
+    # Write the header row
+    header = ['Index', 'User ID', 'Display Name', 'Area', 'Start Time', 'End Time', 'TotalTime']
+    sheet.append(header)
+
     for idx, timesheet in enumerate(data):
-        # Assuming the structure of the timesheet data
-        # Replace these keys with actual keys from the API response
-        user_id = timesheet['Id']
+        user_id = timesheet.get('Employee', '')
+        display_name, area = get_employee_name_and_area(access_token, user_id)
+
         start_time_unix = timesheet['StartTime']
         end_time_unix = timesheet['EndTime']
         total_time = '{:.2f}'.format(timesheet['TotalTime'])  # Convert to string with 2 decimal places
@@ -153,14 +192,12 @@ def write_to_excel(data, start_date, end_date):
         end_time = datetime.fromtimestamp(end_time_unix).strftime('%Y-%m-%d %I:%M:%S %p')
 
         # Write the data to the Excel worksheet
-        row = [idx + 1, user_id, start_time, end_time, total_time]
+        row = [idx + 1, user_id, display_name, area, start_time, end_time, total_time]
         sheet.append(row)
 
-    # Specify the full path where you want to save the file
-    full_path = os.path.join(os.getcwd(), 'timesheets_hours.xlsx')
+    workbook.save('timesheets_hours.xlsx')
+    print('Data written to Excel successfully.')
 
-    workbook.save(full_path)
-    print(f'Data written to Excel successfully. File saved at: {full_path}')
 
 def main():
    # Step 1: Get the access token using OAuth2
@@ -182,9 +219,15 @@ def main():
                 timesheets_data = get_timesheets_by_date_range(access_token, user_id, start_date, end_date)
                 if timesheets_data:
                     all_timesheets_data.extend(timesheets_data)
-
+            
+            # if user_id is not None:
+            #     timesheets_data = get_timesheets_by_date_range(access_token, user_id, start_date, end_date)
+            #     if timesheets_data:
+            #         all_timesheets_data.extend(timesheets_data)
+            #Print Timesheets data
+            print(timesheets_data)
             # Step 3: Write all timesheets data to Excel
-            write_to_excel(all_timesheets_data, start_date, end_date)
+            write_to_excel(all_timesheets_data, access_token, start_date, end_date)
 
 if __name__ == '__main__':
     main()
